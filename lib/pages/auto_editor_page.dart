@@ -6,13 +6,17 @@ import 'package:pathplanner/services/pplib_telemetry.dart';
 import 'package:pathplanner/util/geometry_util.dart';
 import 'package:pathplanner/util/pose2d.dart';
 import 'package:pathplanner/widgets/conditional_widget.dart';
-import 'package:pathplanner/widgets/custom_appbar.dart';
 import 'package:pathplanner/widgets/editor/split_auto_editor.dart';
 import 'package:pathplanner/widgets/field_image.dart';
 import 'package:pathplanner/widgets/keyboard_shortcuts.dart';
 import 'package:pathplanner/widgets/renamable_title.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:undo/undo.dart';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
 
 class AutoEditorPage extends StatefulWidget {
   final SharedPreferences prefs;
@@ -47,6 +51,22 @@ class AutoEditorPage extends StatefulWidget {
 }
 
 class _AutoEditorPageState extends State<AutoEditorPage> {
+  final GlobalKey _fieldImageKey = GlobalKey();
+
+  Future<Uint8List> _capturePng() async {
+    try {
+      RenderRepaintBoundary boundary = _fieldImageKey.currentContext!
+          .findRenderObject() as RenderRepaintBoundary;
+      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      ByteData? byteData =
+          await image.toByteData(format: ui.ImageByteFormat.png);
+      return byteData!.buffer.asUint8List();
+    } catch (e) {
+      print(e);
+      throw e;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     ColorScheme colorScheme = Theme.of(context).colorScheme;
@@ -101,18 +121,49 @@ class _AutoEditorPageState extends State<AutoEditorPage> {
     );
 
     return Scaffold(
-      appBar: CustomAppBar(
-        titleWidget: RenamableTitle(
-          title: widget.auto.name,
-          textStyle: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-            color: colorScheme.onSurface,
-          ),
-          onRename: (value) {
-            widget.onRenamed.call(value);
-            setState(() {});
-          },
+      appBar: AppBar(
+        title: Row(
+          children: [
+            IconButton(
+              icon: Icon(Icons.save),
+              onPressed: () async {
+                // Use FilePicker to ask the user where to save the image
+                String? outputFile = await FilePicker.platform.saveFile(
+                  dialogTitle: 'Please select an output file:',
+                  fileName: '${widget.auto.name}.png',
+                );
+
+                if (outputFile != null) {
+                  try {
+                    Uint8List pngBytes = await _capturePng();
+                    final imageFile = File(outputFile);
+                    await imageFile.writeAsBytes(pngBytes);
+                    // Show a message that the file has been saved
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Image saved to $outputFile')),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to save image: $e')),
+                    );
+                  }
+                }
+              },
+            ),
+            SizedBox(width: 8), // spacing between the button and title
+            RenamableTitle(
+              title: widget.auto.name,
+              textStyle: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w500,
+                color: colorScheme.onSurface,
+              ),
+              onRename: (value) {
+                widget.onRenamed.call(value);
+                setState(() {});
+              },
+            ),
+          ],
         ),
         leading: BackButton(
           onPressed: () {
@@ -129,10 +180,16 @@ class _AutoEditorPageState extends State<AutoEditorPage> {
           child: KeyBoardShortcuts(
             keysToPress: shortCut(BasicShortCuts.redo),
             onKeysPressed: widget.undoStack.redo,
-            child: editorWidget,
+            child: RepaintBoundary(
+              key: _fieldImageKey,
+              child: editorWidget,
+            ),
           ),
         ),
-        falseChild: editorWidget,
+        falseChild: RepaintBoundary(
+          key: _fieldImageKey,
+          child: editorWidget,
+        ),
       ),
     );
   }
