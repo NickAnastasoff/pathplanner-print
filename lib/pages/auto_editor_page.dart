@@ -51,11 +51,11 @@ class AutoEditorPage extends StatefulWidget {
 }
 
 class _AutoEditorPageState extends State<AutoEditorPage> {
-  final GlobalKey _fieldImageKey = GlobalKey();
+  final GlobalKey _tempBoundaryKey = GlobalKey();
 
-  Future<Uint8List> _capturePng() async {
+  Future<Uint8List> _captureFieldImagePng() async {
     try {
-      RenderRepaintBoundary boundary = _fieldImageKey.currentContext!
+      RenderRepaintBoundary boundary = _tempBoundaryKey.currentContext!
           .findRenderObject() as RenderRepaintBoundary;
       ui.Image image = await boundary.toImage(pixelRatio: 3.0);
       ByteData? byteData =
@@ -64,6 +64,60 @@ class _AutoEditorPageState extends State<AutoEditorPage> {
     } catch (e) {
       print(e);
       throw e;
+    }
+  }
+
+  // Function to save field image as PNG
+  Future<void> _saveFieldImage() async {
+    // Use FilePicker to ask the user where to save the image
+    String? outputFile = await FilePicker.platform.saveFile(
+      dialogTitle: 'Please select an output file:',
+      fileName: '${widget.auto.name}.png',
+    );
+
+    if (outputFile != null) {
+      try {
+        // Show field image in full screen
+        await showDialog(
+          context: context,
+          builder: (context) {
+            return Scaffold(
+                backgroundColor: Colors.black.withOpacity(0.8),
+                body: Stack(children: [
+                  Center(
+                    child: RepaintBoundary(
+                      key: _tempBoundaryKey,
+                      child: widget.fieldImage.getWidget(),
+                    ),
+                  ),
+                  Positioned(
+                    top: 40,
+                    right: 40,
+                    child: IconButton(
+                      icon: Icon(Icons.close, color: Colors.white, size: 30),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ),
+                ]));
+          },
+        );
+
+        Uint8List pngBytes = await _captureFieldImagePng();
+
+        final imageFile = File(outputFile);
+        await imageFile.writeAsBytes(pngBytes);
+
+        // Show a message that the file has been saved
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Image saved to $outputFile')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save image: $e')),
+        );
+      }
     }
   }
 
@@ -126,29 +180,7 @@ class _AutoEditorPageState extends State<AutoEditorPage> {
           children: [
             IconButton(
               icon: Icon(Icons.save),
-              onPressed: () async {
-                // Use FilePicker to ask the user where to save the image
-                String? outputFile = await FilePicker.platform.saveFile(
-                  dialogTitle: 'Please select an output file:',
-                  fileName: '${widget.auto.name}.png',
-                );
-
-                if (outputFile != null) {
-                  try {
-                    Uint8List pngBytes = await _capturePng();
-                    final imageFile = File(outputFile);
-                    await imageFile.writeAsBytes(pngBytes);
-                    // Show a message that the file has been saved
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Image saved to $outputFile')),
-                    );
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to save image: $e')),
-                    );
-                  }
-                }
-              },
+              onPressed: _saveFieldImage,
             ),
             SizedBox(width: 8), // spacing between the button and title
             RenamableTitle(
@@ -180,16 +212,10 @@ class _AutoEditorPageState extends State<AutoEditorPage> {
           child: KeyBoardShortcuts(
             keysToPress: shortCut(BasicShortCuts.redo),
             onKeysPressed: widget.undoStack.redo,
-            child: RepaintBoundary(
-              key: _fieldImageKey,
-              child: editorWidget,
-            ),
+            child: editorWidget,
           ),
         ),
-        falseChild: RepaintBoundary(
-          key: _fieldImageKey,
-          child: editorWidget,
-        ),
+        falseChild: editorWidget,
       ),
     );
   }
