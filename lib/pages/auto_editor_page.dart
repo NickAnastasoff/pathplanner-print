@@ -12,11 +12,7 @@ import 'package:pathplanner/widgets/keyboard_shortcuts.dart';
 import 'package:pathplanner/widgets/renamable_title.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:undo/undo.dart';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
-import 'package:flutter/rendering.dart';
-import 'package:file_picker/file_picker.dart';
-import 'dart:io';
+import 'package:pathplanner/util/export_auto_png.dart';
 
 class AutoEditorPage extends StatefulWidget {
   final SharedPreferences prefs;
@@ -52,74 +48,6 @@ class AutoEditorPage extends StatefulWidget {
 
 class _AutoEditorPageState extends State<AutoEditorPage> {
   final GlobalKey _tempBoundaryKey = GlobalKey();
-
-  Future<Uint8List> _captureFieldImagePng() async {
-    try {
-      RenderRepaintBoundary boundary = _tempBoundaryKey.currentContext!
-          .findRenderObject() as RenderRepaintBoundary;
-      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      ByteData? byteData =
-          await image.toByteData(format: ui.ImageByteFormat.png);
-      return byteData!.buffer.asUint8List();
-    } catch (e) {
-      print(e);
-      throw e;
-    }
-  }
-
-  // Function to save field image as PNG
-  Future<void> _saveFieldImage() async {
-    // Use FilePicker to ask the user where to save the image
-    String? outputFile = await FilePicker.platform.saveFile(
-      dialogTitle: 'Please select an output file:',
-      fileName: '${widget.auto.name}.png',
-    );
-
-    if (outputFile != null) {
-      try {
-        // Show field image in full screen
-        await showDialog(
-          context: context,
-          builder: (context) {
-            return Scaffold(
-                backgroundColor: Colors.black.withOpacity(0.8),
-                body: Stack(children: [
-                  Center(
-                    child: RepaintBoundary(
-                      key: _tempBoundaryKey,
-                      child: widget.fieldImage.getWidget(),
-                    ),
-                  ),
-                  Positioned(
-                    top: 40,
-                    right: 40,
-                    child: IconButton(
-                      icon: Icon(Icons.close, color: Colors.white, size: 30),
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                      },
-                    ),
-                  ),
-                ]));
-          },
-        );
-
-        Uint8List pngBytes = await _captureFieldImagePng();
-
-        final imageFile = File(outputFile);
-        await imageFile.writeAsBytes(pngBytes);
-
-        // Show a message that the file has been saved
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Image saved to $outputFile')),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save image: $e')),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,7 +108,8 @@ class _AutoEditorPageState extends State<AutoEditorPage> {
           children: [
             IconButton(
               icon: Icon(Icons.save),
-              onPressed: _saveFieldImage,
+              onPressed: () => exportAutoPng(context, widget.fieldImage,
+                  widget.auto.name, _tempBoundaryKey),
             ),
             SizedBox(width: 8), // spacing between the button and title
             RenamableTitle(
