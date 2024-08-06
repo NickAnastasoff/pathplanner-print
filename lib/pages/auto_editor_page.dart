@@ -5,14 +5,12 @@ import 'package:pathplanner/path/pathplanner_path.dart';
 import 'package:pathplanner/services/pplib_telemetry.dart';
 import 'package:pathplanner/util/geometry_util.dart';
 import 'package:pathplanner/util/pose2d.dart';
-import 'package:pathplanner/widgets/conditional_widget.dart';
-import 'package:pathplanner/widgets/editor/split_auto_editor.dart';
 import 'package:pathplanner/widgets/field_image.dart';
-import 'package:pathplanner/widgets/keyboard_shortcuts.dart';
 import 'package:pathplanner/widgets/renamable_title.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:undo/undo.dart';
 import 'package:pathplanner/util/export_auto_png.dart';
+import 'package:pathplanner/widgets/editor/split_auto_editor.dart';
 
 class AutoEditorPage extends StatefulWidget {
   final SharedPreferences prefs;
@@ -47,7 +45,7 @@ class AutoEditorPage extends StatefulWidget {
 }
 
 class _AutoEditorPageState extends State<AutoEditorPage> {
-  final GlobalKey _tempBoundaryKey = GlobalKey();
+  final GlobalKey _fieldImageKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -67,51 +65,23 @@ class _AutoEditorPageState extends State<AutoEditorPage> {
             .toList()
         : [];
 
-    final editorWidget = SplitAutoEditor(
-      prefs: widget.prefs,
-      auto: widget.auto,
-      autoPaths: autoPaths,
-      autoChoreoPaths: autoChoreoPaths,
-      allPathNames: widget.allPathNames,
-      fieldImage: widget.fieldImage,
-      undoStack: widget.undoStack,
-      onAutoChanged: () {
-        setState(() {
-          if (widget.auto.choreoAuto) {
-            var pathNames = widget.auto.getAllPathNames();
-            if (pathNames.isNotEmpty) {
-              ChoreoPath first = widget.allChoreoPaths
-                  .firstWhere((e) => e.name == pathNames.first);
-              if (first.trajectory.states.isNotEmpty) {
-                Pose2d startPose = Pose2d(
-                  position: first.trajectory.states.first.position,
-                  rotation: GeometryUtil.toDegrees(
-                      first.trajectory.states.first.holonomicRotationRadians),
-                );
-                widget.auto.startingPose = startPose;
-              }
-            }
-          }
-
-          widget.auto.saveFile();
-        });
-
-        if (widget.hotReload) {
-          widget.telemetry?.hotReloadAuto(widget.auto);
-        }
-      },
-    );
-
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
             IconButton(
               icon: Icon(Icons.save),
-              onPressed: () => exportAutoPng(context, widget.fieldImage,
-                  widget.auto.name, _tempBoundaryKey),
+              onPressed: () => exportAutoPng(
+                context,
+                widget.fieldImage,
+                widget.auto.name,
+                _fieldImageKey,
+                autoPaths,
+                autoChoreoPaths,
+                widget.prefs,
+              ),
             ),
-            SizedBox(width: 8), // spacing between the button and title
+            SizedBox(width: 8),
             RenamableTitle(
               title: widget.auto.name,
               textStyle: TextStyle(
@@ -133,18 +103,40 @@ class _AutoEditorPageState extends State<AutoEditorPage> {
           },
         ),
       ),
-      body: ConditionalWidget(
-        condition: widget.shortcuts,
-        trueChild: KeyBoardShortcuts(
-          keysToPress: shortCut(BasicShortCuts.undo),
-          onKeysPressed: widget.undoStack.undo,
-          child: KeyBoardShortcuts(
-            keysToPress: shortCut(BasicShortCuts.redo),
-            onKeysPressed: widget.undoStack.redo,
-            child: editorWidget,
-          ),
-        ),
-        falseChild: editorWidget,
+      body: SplitAutoEditor(
+        key: _fieldImageKey,
+        prefs: widget.prefs,
+        auto: widget.auto,
+        autoPaths: autoPaths,
+        autoChoreoPaths: autoChoreoPaths,
+        allPathNames: widget.allPathNames,
+        fieldImage: widget.fieldImage,
+        undoStack: widget.undoStack,
+        onAutoChanged: () {
+          setState(() {
+            if (widget.auto.choreoAuto) {
+              var pathNames = widget.auto.getAllPathNames();
+              if (pathNames.isNotEmpty) {
+                ChoreoPath first = widget.allChoreoPaths
+                    .firstWhere((e) => e.name == pathNames.first);
+                if (first.trajectory.states.isNotEmpty) {
+                  Pose2d startPose = Pose2d(
+                    position: first.trajectory.states.first.position,
+                    rotation: GeometryUtil.toDegrees(
+                        first.trajectory.states.first.holonomicRotationRadians),
+                  );
+                  widget.auto.startingPose = startPose;
+                }
+              }
+            }
+
+            widget.auto.saveFile();
+          });
+
+          if (widget.hotReload) {
+            widget.telemetry?.hotReloadAuto(widget.auto);
+          }
+        },
       ),
     );
   }

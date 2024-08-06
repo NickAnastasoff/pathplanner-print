@@ -5,6 +5,10 @@ import 'dart:typed_data';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
+import 'package:pathplanner/path/pathplanner_path.dart';
+import 'package:pathplanner/path/choreo_path.dart';
+import 'package:pathplanner/widgets/editor/path_painter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Future<Uint8List> _captureFieldImagePng(GlobalKey boundaryKey) async {
   try {
@@ -19,10 +23,15 @@ Future<Uint8List> _captureFieldImagePng(GlobalKey boundaryKey) async {
   }
 }
 
-// Function to save field image as PNG
-Future<void> exportAutoPng(BuildContext context, FieldImage fieldImage,
-    String autoName, GlobalKey tempBoundaryKey) async {
-  // Use FilePicker to ask the user where to save the image
+Future<void> exportAutoPng(
+  BuildContext context,
+  FieldImage fieldImage,
+  String autoName,
+  GlobalKey tempBoundaryKey,
+  List<PathPlannerPath> paths,
+  List<ChoreoPath> choreoPaths,
+  SharedPreferences prefs,
+) async {
   String? outputFile = await FilePicker.platform.saveFile(
     dialogTitle: 'Please select an output file:',
     fileName: '$autoName.png',
@@ -30,19 +39,27 @@ Future<void> exportAutoPng(BuildContext context, FieldImage fieldImage,
 
   if (outputFile != null) {
     try {
-      // Show field image in full screen
       await showDialog(
         context: context,
         builder: (context) {
           return Scaffold(
-              backgroundColor: Colors.black.withOpacity(0.8),
-              body: Stack(children: [
+            backgroundColor: Colors.black.withOpacity(0.8),
+            body: Stack(
+              children: [
                 Center(
                   child: RepaintBoundary(
                     key: tempBoundaryKey,
                     child: Container(
                       color: Colors.white,
-                      child: fieldImage.getWidget(),
+                      child: CustomPaint(
+                        painter: PathPainter(
+                          paths: paths,
+                          choreoPaths: choreoPaths,
+                          fieldImage: fieldImage,
+                          prefs: prefs,
+                        ),
+                        child: fieldImage.getWidget(),
+                      ),
                     ),
                   ),
                 ),
@@ -56,7 +73,9 @@ Future<void> exportAutoPng(BuildContext context, FieldImage fieldImage,
                     },
                   ),
                 ),
-              ]));
+              ],
+            ),
+          );
         },
       );
 
@@ -65,7 +84,6 @@ Future<void> exportAutoPng(BuildContext context, FieldImage fieldImage,
       final imageFile = File(outputFile);
       await imageFile.writeAsBytes(pngBytes);
 
-      // Show a message that the file has been saved
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Image saved to $outputFile')),
       );
